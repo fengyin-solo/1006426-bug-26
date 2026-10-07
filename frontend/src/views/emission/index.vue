@@ -3,7 +3,7 @@
     <header class="page-head">
       <div>
         <h2>环保指标监控管理</h2>
-        <p class="page-desc">维护环保监控记录，围绕监控编号、监控指标、限值要求、实测值做登记、筛选与状态流转。</p>
+        <p class="page-desc">维护环保监控记录，围绕监控编号、监控指标、限值要求、实测值做登记、筛选与状态流转；飞灰固化检测结论进入下方待复核清单。</p>
       </div>
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记环保监控记录</button>
@@ -16,7 +16,38 @@
         <span class="stat-label">{{ item.label }}</span>
         <strong class="stat-value">{{ item.value }}</strong>
       </article>
+      <article class="stat-card">
+        <span class="stat-label">飞灰检测待复核</span>
+        <strong class="stat-value">{{ reviewRows.length }}</strong>
+      </article>
     </div>
+
+    <h3 class="section-title">环保监控待复核清单（飞灰固化检测结论）</h3>
+    <table class="data-table review-table">
+      <thead>
+        <tr>
+          <th>固化编号</th>
+          <th>检测结论（最近一次复检为准）</th>
+          <th>限值要求</th>
+          <th>送达日期</th>
+          <th>来源</th>
+          <th>复核状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="row in reviewRows" :key="String(row.id)">
+          <td>{{ row['监控编号'] }}</td>
+          <td>{{ row['实测值'] }}</td>
+          <td>{{ row['限值要求'] }}</td>
+          <td>{{ row['监控日期'] }}</td>
+          <td>飞灰固化处置</td>
+          <td>{{ row.status }}</td>
+        </tr>
+        <tr v-if="!reviewRows.length">
+          <td colspan="6" class="empty-state">暂无飞灰固化检测结论待复核</td>
+        </tr>
+      </tbody>
+    </table>
 
     <p class="status-legend">
       <span v-for="item in statusSummary" :key="item.status" class="legend-item">
@@ -46,15 +77,20 @@
           <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
           <td>{{ row.status }}</td>
           <td class="row-actions">
-            <button
-              v-for="action in actions"
-              :key="action"
-              class="link"
-              type="button"
-              @click="runAction(action, row)"
-            >
-              {{ action }}
-            </button>
+            <template v-if="isReviewRow(row)">
+              <span class="review-note">待复核，由飞灰固化页驱动</span>
+            </template>
+            <template v-else>
+              <button
+                v-for="action in actions"
+                :key="action"
+                class="link"
+                type="button"
+                @click="runAction(action, row)"
+              >
+                {{ action }}
+              </button>
+            </template>
           </td>
         </tr>
         <tr v-if="!rows.length">
@@ -77,6 +113,7 @@ import {
   downloadEntries,
   listEntries,
   moduleMeta,
+  reviewQueue,
   runAction as applyAction,
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
@@ -84,10 +121,10 @@ import type { EntryRow } from '@/data/types'
 const meta = moduleMeta('emission')
 const columns = ["监控编号", "监控指标", "限值要求", "实测值", "达标判定", "监控日期", "监控人员", "监控状态"]
 const actions = ["提交监控", "判定达标", "标记未达标"]
-const statuses = ["待监控", "监控中", "已达标", "未达标"]
-const stats = [{"label": "待监控指标", "value": 0}, {"label": "已达标指标", "value": 0}, {"label": "未达标指标", "value": 0}]
+const statuses = ["待监控", "监控中", "已达标", "未达标", "待复核"]
 
 const rows = ref<EntryRow[]>([])
+const reviewRows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
@@ -98,6 +135,19 @@ const statusSummary = computed(() =>
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+const stats = computed(() => [
+  { label: "待监控指标", value: countByStatus("待监控") },
+  { label: "已达标指标", value: countByStatus("已达标") },
+  { label: "未达标指标", value: countByStatus("未达标") },
+])
+
+function countByStatus(status: string): number {
+  return rows.value.filter((row) => String(row.status) === status).length
+}
+
+function isReviewRow(row: EntryRow): boolean {
+  return String(row['来源模块'] ?? '') === 'flyash'
+}
 
 function resetFilters() {
   filters.value = {}
@@ -128,6 +178,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    reviewRows.value = reviewQueue()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '环保指标监控列表读取失败'
   }
