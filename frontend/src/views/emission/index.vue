@@ -63,8 +63,28 @@
       </tbody>
     </table>
 
+    <section class="review-block">
+      <h3>飞灰固化检测结论 · 待复核清单</h3>
+      <p class="page-desc">飞灰固化批次首次检测与复检的结论自动落到这里等待环保复核；复检结论与首次冲突时以最近一次复检为准，判返工的批次会从清单撤下。</p>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th v-for="column in reviewColumns" :key="column">{{ column }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in reviewItems" :key="String(item.id)">
+            <td v-for="column in reviewColumns" :key="column">{{ item[column] ?? '—' }}</td>
+          </tr>
+          <tr v-if="!reviewItems.length">
+            <td :colspan="reviewColumns.length" class="empty-state">待复核清单为空：飞灰固化批次确认检测后会自动进入这里</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <footer class="page-foot">
-      <span>共 {{ total }} 条环保指标监控记录</span>
+      <span>共 {{ total }} 条环保指标监控记录，待复核 {{ reviewItems.length }} 条</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
   </section>
@@ -76,18 +96,21 @@ import { computed, onMounted, ref } from 'vue'
 import {
   downloadEntries,
   listEntries,
+  listReviewQueue,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import type { EntryRow, ReviewItem } from '@/data/types'
 
 const meta = moduleMeta('emission')
 const columns = ["监控编号", "监控指标", "限值要求", "实测值", "达标判定", "监控日期", "监控人员", "监控状态"]
 const actions = ["提交监控", "判定达标", "标记未达标"]
 const statuses = ["待监控", "监控中", "已达标", "未达标"]
+const reviewColumns = ["固化编号", "监控指标", "来源", "检测结论", "检测人员", "检测时间", "复核状态"]
 const stats = [{"label": "待监控指标", "value": 0}, {"label": "已达标指标", "value": 0}, {"label": "未达标指标", "value": 0}]
 
 const rows = ref<EntryRow[]>([])
+const reviewItems = ref<ReviewItem[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
@@ -128,6 +151,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    reviewItems.value = listReviewQueue()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '环保指标监控列表读取失败'
   }
@@ -135,3 +159,8 @@ function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.review-block { margin-top: 20px; }
+.review-block h3 { font-size: 15px; margin: 0 0 4px; }
+</style>

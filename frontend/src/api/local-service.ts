@@ -1,6 +1,7 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
-import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
+import { reconcileReviews } from './flyash-service'
+import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult, ReviewItem } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
 const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
@@ -26,6 +27,11 @@ export function filterRows(rows: EntryRow[], filters: Record<string, string>): E
 export function listEntries(key: string, filters: Record<string, string> = {}): PageResult {
   const matched = filterRows(listRows(key), filters)
   return { items: matched, total: matched.length, page: 1, size: matched.length }
+}
+
+// 环保监控的待复核清单：来源是飞灰固化的检测结论，读取时先与飞灰批次对账。
+export function listReviewQueue(): ReviewItem[] {
+  return reconcileReviews()
 }
 
 export function runAction(key: string, id: number, action: string): ActionResult {
